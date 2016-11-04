@@ -24,13 +24,14 @@
     this.paginationSelector = options.pagination;
     this.$scrollContainer = $element;
     this.$container = (window === $element.get(0) ? $(document) : $element);
-    this.defaultDelay = options.delay;
+    this.defaultDelay = options.delay;  
     this.negativeMargin = options.negativeMargin;
     this.nextUrl = null;
     this.isBound = false;
     this.isPaused = false;
     this.isInitialized = false;
     this.jsXhr = false;
+    this.activeTab = options.activeTab;
     this.listeners = {
       next:     new IASCallbacks($),
       load:     new IASCallbacks($),
@@ -57,7 +58,8 @@
       }
 
       var currentScrollOffset = this.getCurrentScrollOffset(this.$scrollContainer),
-          scrollThreshold = this.getScrollThreshold()
+          //scrollThreshold = this.getScrollThreshold()
+          scrollThreshold = $(this.itemsContainerSelector).height();
       ;
 
       // invalid scrollThreshold. The DOM might not have loaded yet...
@@ -66,8 +68,8 @@
       }
 
       this.fire('scroll', [currentScrollOffset, scrollThreshold]);
-
-      if (currentScrollOffset >= scrollThreshold) {
+      
+      if (currentScrollOffset >= scrollThreshold  && $(this.activeTab).hasClass('active')) {
         this.next();
       }
     };
@@ -161,7 +163,7 @@
       container = container || this.$container;
 
       // always take the last matching item
-      return $(this.nextSelector, container).last().attr('href');
+      return $(this.nextSelector).last().attr('href');
     };
 
     /**
@@ -186,34 +188,43 @@
       };
 
       self.fire('load', [loadEvent]);
+      var items = null;
 
-      this.jsXhr = $.get(loadEvent.url, null, $.proxy(function(data) {
-        $itemContainer = $(this.itemsContainerSelector, data).eq(0);
-        if (0 === $itemContainer.length) {
-          $itemContainer = $(data).filter(this.itemsContainerSelector).eq(0);
-        }
+      this.jsXhr = $.ajax({
+        url: loadEvent.url,
+        headers: options.headers,
+        dataType: 'json',
+        success: function(data) {
+          data = data.maps;
+          items = data;
+          this.itemsContainerSelector = '.admin-maps';
+          $itemContainer = $(this.itemsContainerSelector, data).eq(0);
+          if (0 === $itemContainer.length) {
+            $itemContainer = $(data).filter(this.itemsContainerSelector).eq(0);
+          }
 
-        if ($itemContainer) {
-          $itemContainer.find(this.itemSelector).each(function() {
-            items.push(this);
-          });
-        }
+          if ($itemContainer) {
+            $itemContainer.find(this.itemSelector).each(function() {
+              items.push(this);
+            });
+          }
 
-        self.fire('loaded', [data, items]);
+          self.fire('loaded', [data, items]);
 
-        if (callback) {
-          timeDiff = +new Date() - timeStart;
-          if (timeDiff < delay) {
-            setTimeout(function() {
+          if (callback) {
+            timeDiff = +new Date() - timeStart;
+            if (timeDiff < delay) {
+              setTimeout(function() {
+                callback.call(self, data, items);
+              }, delay - timeDiff);
+            } else {
               callback.call(self, data, items);
-            }, delay - timeDiff);
-          } else {
-            callback.call(self, data, items);
+            }
           }
         }
-      }, self), 'html');
+      });
 
-      return this.jsXhr;
+      return items;
     };
 
     /**
@@ -385,7 +396,7 @@
     this.nextUrl = this.getNextUrl();
 
     // start loading next page if content is shorter than page fold
-    if (currentScrollOffset >= scrollThreshold) {
+    if (currentScrollOffset >= scrollThreshold && $(this.activeTab).hasClass('active')) {
       this.next();
 
       // flag as initialized when rendering is completed
@@ -656,6 +667,7 @@
     next: '.next',
     pagination: false,
     delay: 600,
-    negativeMargin: 10
+    negativeMargin: 10,
+    activeTab: '#adminMapTitle'
   };
 })(jQuery);
